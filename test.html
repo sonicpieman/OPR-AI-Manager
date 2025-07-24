@@ -1,0 +1,1083 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Grimdark Firefight AI Tool</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 font-sans">
+  <div id="root" class="min-h-screen flex items-center justify-center p-4"></div>
+
+  <!-- React & ReactDOM -->
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <script type="text/babel">
+    // React hooks
+    const { useState, useEffect } = React;
+
+    // Home Screen Component
+    function HomeScreen({ onNewArmy, onArmySelect }) {
+      return (
+        <div className="p-0 bg-gray-900 rounded-2xl max-w-md w-full shadow-2xl border border-gray-800">
+          <div className="bg-gradient-to-r from-yellow-500 via-yellow-400 to-yellow-300 rounded-t-2xl px-8 py-6 text-center">
+            <h1 className="text-3xl font-extrabold text-gray-900 mb-2 tracking-wide">Grimdark Firefight AI</h1>
+            <p className="text-lg text-gray-800 mb-2">AI Assistant & Army Builder</p>
+          </div>
+          <div className="p-8 flex flex-col gap-4">
+            <button 
+              onClick={onNewArmy} 
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-3 rounded-xl shadow"
+            >
+              New Army
+            </button>
+            <button 
+              onClick={onArmySelect} 
+              className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold px-6 py-3 rounded-xl shadow"
+            >
+              Army Select
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // Army List Item Component
+    function ArmyListItem({ army, expanded, onExpand, idx }) {
+      return (
+        <li className="py-2">
+          <div
+            className="flex justify-between items-center cursor-pointer select-none"
+            onClick={() => onExpand(idx)}
+          >
+            <div className="text-yellow-300 hover:text-yellow-400 transition font-semibold">
+              {army.name} ({(army.units || []).length} units)
+            </div>
+            <div className="text-gray-400 px-2 select-none">
+              {expanded ? "▲" : "▼"}
+            </div>
+          </div>
+          {expanded && (
+            <div className="mt-2 ml-4 bg-gray-700 p-3 rounded text-sm">
+              {(army.units || []).length === 0 && <p>No units in this army.</p>}
+              {(army.units || []).map((unit, uIdx) => (
+                <div key={uIdx} className="mb-1 last:mb-0">
+                  <span className="font-semibold">{unit.name || "(Unnamed)"}</span> — {unit.type} — SR: {(unit.rules && unit.rules.length) ? unit.rules.join(", ") : "None"} — QUA: {unit.qua || "-"} — DEF: {unit.def || "-"}
+                </div>
+              ))}
+            </div>
+          )}
+        </li>
+      );
+    }
+
+    // Army Select Component
+    function ArmySelect({ onBack, onStartMatch, onDeleteArmy, onEditArmy }) {
+      const [armies, setArmies] = useState([]);
+      const [expandedIndex, setExpandedIndex] = useState(null);
+
+      useEffect(() => {
+        const saved = JSON.parse(localStorage.getItem("armies") || "[]");
+        setArmies(saved);
+      }, []);
+
+      const toggleExpand = (index) => {
+        setExpandedIndex(expandedIndex === index ? null : index);
+      };
+
+      return (
+        <div className="p-0 bg-gray-900 rounded-2xl max-w-2xl w-full shadow-2xl border border-gray-800">
+          <div className="bg-gradient-to-r from-yellow-500 via-yellow-400 to-yellow-300 rounded-t-2xl px-8 py-5 flex items-center justify-between">
+            <h2 className="text-3xl font-extrabold text-gray-900 tracking-wide">Select Army</h2>
+            <span className="text-lg font-semibold text-gray-800">{armies.length} Saved</span>
+          </div>
+          <div className="p-8">
+            {armies.length === 0 && (
+              <p className="mb-4 text-center text-lg text-gray-400">No saved armies found. Go create one!</p>
+            )}
+            <ul className="space-y-4 mb-8">
+              {armies.map((army, i) => (
+                <li key={i}>
+                  <div
+                    className={`transition-all duration-200 border-2 rounded-xl shadow-lg ${expandedIndex === i ? 'border-yellow-400 bg-gray-800' : 'border-gray-700 bg-gray-850'} hover:border-yellow-300 cursor-pointer`}
+                    onClick={() => toggleExpand(i)}
+                  >
+                    <div className="flex justify-between items-center px-6 py-4">
+                      <div className="text-yellow-300 text-xl font-bold tracking-wide">
+                        {army.name}
+                        <span className="ml-2 text-sm text-gray-400 font-normal">({(army.units || []).length} units, {army.cost || 0} pts)</span>
+                      </div>
+                      <div className="text-gray-400 px-2 select-none text-2xl">
+                        {expandedIndex === i ? "▲" : "▼"}
+                      </div>
+                    </div>
+                    {expandedIndex === i && (
+                      <div className="px-6 pb-4">
+                        {(army.units || []).length === 0 && <p className="text-gray-400">No units in this army.</p>}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                          {(army.units || []).map((unit, uIdx) => (
+                            <div key={uIdx} className="mb-1 last:mb-0 bg-gray-700 rounded p-2">
+                              <span className="font-semibold text-yellow-200">{unit.name || "(Unnamed)"}</span>
+                              <span className="ml-2 text-gray-300">{unit.type}</span>
+                              <span className="ml-2 text-purple-300">SR: {(unit.rules && unit.rules.length) ? unit.rules.join(", ") : "None"}</span>
+                              <span className="ml-2 text-blue-300">QUA:+{unit.qua || "-"}</span>
+                              <span className="ml-2 text-green-300">DEF:+{unit.def || "-"}</span>
+                              <span className="ml-2 text-pink-300">Cost:{unit.cost || 0}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <div className="flex flex-wrap gap-4 justify-center mt-2">
+              <button
+                onClick={onBack}
+                className="bg-gray-700 hover:bg-gray-800 text-gray-100 font-semibold px-6 py-2 rounded-lg shadow"
+              >
+                Back
+              </button>
+              <button
+                onClick={() => {
+                  if (expandedIndex === null) {
+                    alert("Please select an army by clicking its name first.");
+                    return;
+                  }
+                  onStartMatch(armies[expandedIndex]);
+                }}
+                className="bg-green-600 hover:bg-green-700 text-white font-semibold px-6 py-2 rounded-lg shadow"
+              >
+                Start Match
+              </button>
+              <button
+                onClick={() => {
+                  if (expandedIndex === null) {
+                    alert("Please select an army by clicking its name first.");
+                    return;
+                  }
+                  onEditArmy(armies[expandedIndex]);
+                }}
+                className="bg-yellow-500 hover:bg-yellow-600 text-gray-900 font-semibold px-6 py-2 rounded-lg shadow"
+              >
+                Edit Army
+              </button>
+              <button
+                onClick={() => {
+                  if (expandedIndex === null) {
+                    alert("Please select an army by clicking its name first.");
+                    return;
+                  }
+                  onDeleteArmy(expandedIndex);
+                  setExpandedIndex(null);
+                  const saved = JSON.parse(localStorage.getItem("armies") || "[]");
+                  setArmies(saved);
+                }}
+                className="bg-red-600 hover:bg-red-700 text-white font-semibold px-6 py-2 rounded-lg shadow"
+              >
+                Delete Army
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Hardcoded rule explanations
+    const RULE_EXPLANATIONS = {
+      "Ambush": "AI units with Ambush must always be kept in reserve, and must always deploy following the AI deployment rules at the start of the second round.",
+      "AP": "AI units with AP weapons always target enemies with the best defensive value first",
+      "Caster": "AI units always cast spells after moving (before attacking),selecting a random spell by rolling D3+X, where X is their caster level. If there is no valid target for that spell, or they d’t have enough tokens to cast it, they must cycle through the list until there is a valid spell, or else don’t cast anything.",
+      "Counter": "AI units with Counter are always activated after all other friendly non-Counter units in their section have been activated",
+      "Deadly": " AI units with Deadly weapons always target single-model units with Tough first, and units with Tough second, prioritizing those with the lowest total remaining Tough.",
+      "Flying": "AI units with Flying treat difficult and dangerous terrain as open terrain when choosing where to move next.",
+      "Indirect": "AI units with Indirect weapons that are in range of enemies always use Hold and shoot",
+      "Relentless": "AI units with Relentless that have weapons that are in range of enemies always use Hold and shoot.",
+      "Sniper": "AI units with Sniper weapons always target heroes first, and models with upgrades second, prioritizing those with the most expensive upgrade",
+      "Strider": "AI units with Strider treat difficult terrain as open terrain when choosing where to move next."
+    };
+
+    function ArmyCreation({ onSave, onBack, editArmy }) {
+      const [armyName, setArmyName] = useState(editArmy ? editArmy.name : "");
+      // Add cost field to units
+      const [units, setUnits] = useState(editArmy ? editArmy.units.map(u => ({ ...u, cost: u.cost || "" })) : []);
+
+      const unitTypes = ["Hybrid", "Shooting", "Melee"];
+      const specialRules = ["Ambush","AP","Caster","Counter","Deadly","Flying","Indirect","Relentless","Sniper","Strider"];
+      // Use hardcoded explanations
+      const ruleExplanations = RULE_EXPLANATIONS;
+
+      const validValues = ["2","3","4","5","6"];
+
+      const addUnit = () => {
+        setUnits([
+          ...units, 
+          { name: "", type: "Hybrid", rules: [], qua: "", def: "", cost: "" }
+        ]);
+      };
+
+      const updateUnit = (index, key, value) => {
+        const updated = [...units];
+        updated[index][key] = value;
+        setUnits(updated);
+      };
+
+      const toggleRule = (index, rule) => {
+        const updated = [...units];
+        const rules = updated[index].rules;
+        updated[index].rules = rules.includes(rule)
+          ? rules.filter(r => r !== rule)
+          : [...rules, rule];
+        setUnits(updated);
+      };
+
+      const saveArmy = () => {
+        if (!armyName.trim()) {
+          alert("Please enter an army name.");
+          return;
+        }
+        for (let i = 0; i < units.length; i++) {
+          const u = units[i];
+          if (!u.name.trim()) {
+            alert(`Unit ${i + 1} is missing a name.`);
+            return;
+          }
+          if (!validValues.includes(u.qua)) {
+            alert(`Unit \"${u.name}\" has invalid Quality (QUA). Please select 2-6.`);
+            return;
+          }
+          if (!validValues.includes(u.def)) {
+            alert(`Unit \"${u.name}\" has invalid Defense (DEF). Please select 2-6.`);
+            return;
+          }
+          if (!u.cost || isNaN(Number(u.cost)) || Number(u.cost) < 0) {
+            alert(`Unit \"${u.name}\" has invalid Cost. Please enter a non-negative number.`);
+            return;
+          }
+        }
+        const armyCost = units.reduce((sum, u) => sum + Number(u.cost || 0), 0);
+        const army = { name: armyName, units, cost: armyCost };
+        const existing = JSON.parse(localStorage.getItem("armies") || "[]");
+        localStorage.setItem("armies", JSON.stringify([...existing, army]));
+        onSave();
+      };
+
+      // Tooltip state for rule explanations
+      const [tooltip, setTooltip] = useState({ rule: null, text: "", x: 0, y: 0 });
+
+      // Army cost calculation
+      const armyCost = units.reduce((sum, u) => sum + Number(u.cost || 0), 0);
+
+      return (
+        <div className="p-0 bg-gray-900 rounded-2xl max-w-2xl w-full shadow-2xl border border-gray-800">
+          <div className="bg-gradient-to-r from-blue-500 via-blue-400 to-blue-300 rounded-t-2xl px-8 py-6 flex items-center justify-between">
+            <h2 className="text-3xl font-extrabold text-gray-900 tracking-wide">Create New Army</h2>
+            <span className="text-lg font-semibold text-gray-800">{units.length} Units</span>
+          </div>
+          <div className="p-8">
+            <label className="block mb-2 text-lg font-semibold text-blue-300">Army Name:</label>
+            <input 
+              value={armyName}
+              onChange={(e) => setArmyName(e.target.value)}
+              className="w-full p-3 mb-4 rounded-xl bg-gray-700 border-2 border-blue-400 text-lg font-semibold text-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <div className="mb-4 text-right text-xl font-bold text-blue-400">Army Cost: {armyCost}</div>
+            <div className="mb-8">
+              <h3 className="text-2xl font-bold mb-4 text-blue-300">Units</h3>
+              <div className="space-y-4">
+                {units.map((unit, idx) => (
+                  <div key={idx} className="p-4 bg-gray-800 rounded-xl border-2 border-blue-400 shadow-lg">
+                    <input
+                      placeholder="Unit Name"
+                      value={unit.name}
+                      onChange={(e) => updateUnit(idx, "name", e.target.value)}
+                      className="w-full p-2 mb-2 rounded bg-gray-700 border border-blue-300 text-blue-200 font-semibold"
+                    />
+                    <div className="flex gap-2 mb-2">
+                      <input
+                        type="number"
+                        min="0"
+                        placeholder="Unit Cost"
+                        value={unit.cost}
+                        onChange={e => updateUnit(idx, "cost", e.target.value)}
+                        className="w-1/3 p-2 rounded bg-gray-700 border border-pink-300 text-pink-200 font-semibold"
+                      />
+                      <select
+                        value={unit.type}
+                        onChange={(e) => updateUnit(idx, "type", e.target.value)}
+                        className="w-2/3 p-2 rounded bg-gray-700 border border-green-300 text-green-200 font-semibold"
+                      >
+                        {unitTypes.map(type => (
+                          <option key={type} value={type}>{type}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="mb-2">
+                      <label className="block font-semibold mb-1 text-purple-300">Special Rules:</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        {specialRules.map(rule => (
+                          <label key={rule} className="flex items-center space-x-1">
+                            <input
+                              type="checkbox"
+                              checked={unit.rules.includes(rule)}
+                              onChange={() => toggleRule(idx, rule)}
+                            />
+                            <span
+                              className="underline decoration-dotted cursor-pointer text-purple-200"
+                              tabIndex="0"
+                              onMouseEnter={e => setTooltip({ rule, text: ruleExplanations[rule], x: e.target.getBoundingClientRect().left, y: e.target.getBoundingClientRect().bottom })}
+                              onMouseLeave={() => setTooltip({ rule: null, text: "", x: 0, y: 0 })}
+                              onFocus={e => setTooltip({ rule, text: ruleExplanations[rule], x: e.target.getBoundingClientRect().left, y: e.target.getBoundingClientRect().bottom })}
+                              onBlur={() => setTooltip({ rule: null, text: "", x: 0, y: 0 })}
+                            >
+                              {rule}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                      {tooltip.rule && (
+                        <div
+                          style={{
+                            position: "fixed",
+                            left: tooltip.x,
+                            top: tooltip.y + 8,
+                            zIndex: 100,
+                            background: "#1a202c",
+                            color: "#f7fafc",
+                            padding: "12px",
+                            borderRadius: "8px",
+                            minWidth: "320px",
+                            maxWidth: "400px",
+                            fontSize: "14px",
+                            border: "1px solid #2d3748",
+                            boxShadow: "0 4px 16px rgba(0,0,0,0.4)"
+                          }}
+                        >
+                          {tooltip.text}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <select
+                        value={unit.qua}
+                        onChange={(e) => updateUnit(idx, "qua", e.target.value)}
+                        className="w-1/2 p-2 rounded bg-gray-700 border border-blue-300 text-blue-200 font-semibold"
+                      >
+                        <option value="">Select Quality (QUA)</option>
+                        {validValues.map(num => (
+                          <option key={num} value={num}>{num}</option>
+                        ))}
+                      </select>
+                      <select
+                        value={unit.def}
+                        onChange={(e) => updateUnit(idx, "def", e.target.value)}
+                        className="w-1/2 p-2 rounded bg-gray-700 border border-green-300 text-green-200 font-semibold"
+                      >
+                        <option value="">Select Defense (DEF)</option>
+                        {validValues.map(num => (
+                          <option key={num} value={num}>{num}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <button
+                onClick={addUnit}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-xl shadow mt-2"
+              >
+                Add Unit
+              </button>
+            </div>
+            <div className="flex justify-between mt-8">
+              <button 
+                onClick={onBack}
+                className="bg-gray-700 hover:bg-gray-800 text-gray-100 font-semibold px-6 py-2 rounded-lg shadow"
+              >
+                Back
+              </button>
+              <button 
+                onClick={saveArmy}
+                className="bg-green-600 hover:bg-green-700 text-white font-semibold px-6 py-2 rounded-lg shadow"
+              >
+                Save Army
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function MatchScreen({ army, onBack }) {
+      const [activeIndex, setActiveIndex] = React.useState(null);
+      const [unitsState, setUnitsState] = React.useState(army.units.map(u => ({ ...u })));
+      const [turn, setTurn] = React.useState(1);
+      const [activatedThisTurn, setActivatedThisTurn] = React.useState([]);
+      // Deployment modal state
+      const [showDeployment, setShowDeployment] = React.useState(true);
+      const [eastUnits, setEastUnits] = React.useState([]);
+      const [westUnits, setWestUnits] = React.useState([]);
+      // Use hardcoded explanations
+      const ruleExplanations = RULE_EXPLANATIONS;
+      // Tooltip state for rule explanations in MatchScreen
+      const [tooltip, setTooltip] = React.useState({ rule: null, text: "", x: 0, y: 0 });
+
+      // Decision tree state
+      const [decisionStep, setDecisionStep] = React.useState(null);
+      const [decisionAnswers, setDecisionAnswers] = React.useState([]);
+      const [finalDecision, setFinalDecision] = React.useState("");
+      const [overrideStep, setOverrideStep] = React.useState(null);
+      const [overrideDone, setOverrideDone] = React.useState(false);
+
+      // On mount, randomly split units into East/West
+      React.useEffect(() => {
+        if (!army.units || army.units.length === 0) return;
+        // Shuffle units
+        const shuffled = [...army.units].sort(() => Math.random() - 0.5);
+        const mid = Math.ceil(shuffled.length / 2);
+        setEastUnits(shuffled.slice(0, mid));
+        setWestUnits(shuffled.slice(mid));
+      }, [army.units]);
+      // Reset decision tree when active unit changes
+      React.useEffect(() => {
+        setDecisionStep(null);
+        setDecisionAnswers([]);
+        setFinalDecision("");
+        setOverrideStep(null);
+        setOverrideDone(false);
+      }, [activeUnit]);
+
+      // Check for Relentless/Indirect rules
+      function hasOverrideRule(unit) {
+        if (!unit || !unit.rules) return false;
+        return unit.rules.includes("Relentless") || unit.rules.includes("Indirect");
+      }
+
+      function getDecisionQuestion(type, step, answers) {
+        if (!type) return null;
+        if (type === "Hybrid") {
+          switch (step) {
+            case 1:
+              return "Are there any valid objectives not under the AI’s control?";
+            case 2:
+              return "Are there any enemies in the way?";
+            case 3:
+              return "Is the objective in Rush range but not in Advance range?";
+            case 4:
+              return "If you Advance will any enemies be in shooting range?";
+            case 5:
+              return "Are any enemies in Charge range?";
+            case 6:
+              return "If you Advance will any enemies be in shooting range?";
+            default:
+              return null;
+          }
+        } else if (type === "Shooting") {
+          switch (step) {
+            case 1:
+              return "Are there any valid objectives not under the AI’s control?";
+            case 2:
+              return "If you Advance will any enemies be in shooting range?";
+            case 3:
+              return "If you Advance will any enemies be in shooting range?";
+            default:
+              return null;
+          }
+        } else if (type === "Melee") {
+          switch (step) {
+            case 1:
+              return "Are there any valid objectives not under the AI’s control?";
+            case 2:
+              return "Are there any enemies in the way?";
+            case 3:
+              return "Are any enemies in Charge range?";
+            default:
+              return null;
+          }
+        }
+        return null;
+      }
+
+      function getNextStep(type, step, answer, answers) {
+        if (type === "Hybrid") {
+          if (step === null) return 1;
+          if (step === 1) return answer === "yes" ? 2 : 5;
+          if (step === 2) return answer === "yes" ? "final:Charge enemy if possible, else Advance toward objective and shoot if possible, else Rush toward objective" : 3;
+          if (step === 3) return answer === "yes" ? "final:Rush toward objective" : 4;
+          if (step === 4) return answer === "yes" ? "final:Advance toward objective and shoot if possible" : "final:Rush toward objective";
+          if (step === 5) return answer === "yes" ? "final:Charge enemy" : 6;
+          if (step === 6) return answer === "yes" ? "final:Advance toward enemy and shoot if possible" : "final:Rush toward enemy";
+        } else if (type === "Shooting") {
+          if (step === null) return 1;
+          if (step === 1) return answer === "yes" ? 2 : 3;
+          if (step === 2) return answer === "yes" ? "final:Advance toward objective and shoot if possible" : "final:Rush toward objective";
+          if (step === 3) return answer === "yes" ? "final:Advance toward enemy and shoot if possible" : "final:Rush toward enemy";
+        } else if (type === "Melee") {
+          if (step === null) return 1;
+          if (step === 1) return answer === "yes" ? 2 : 3;
+          if (step === 2) return answer === "yes" ? "final:Charge enemy if possible, else Rush toward objective" : "final:Rush toward objective";
+          if (step === 3) return answer === "yes" ? "final:Charge enemy" : "final:Rush toward enemy";
+        }
+        return null;
+      }
+
+      function handleDecisionAnswer(ans) {
+        if (!activeUnit) return;
+        const type = activeUnit.type;
+        const next = getNextStep(type, decisionStep, ans, decisionAnswers);
+        if (typeof next === "string" && next.startsWith("final:")) {
+          setFinalDecision(next.replace("final:", ""));
+          setDecisionStep(null);
+          setDecisionAnswers([...decisionAnswers, ans]);
+        } else {
+          setDecisionStep(next);
+          setDecisionAnswers([...decisionAnswers, ans]);
+          setFinalDecision("");
+        }
+      }
+
+      function startDecision() {
+        if (activeUnit && hasOverrideRule(activeUnit)) {
+          setOverrideStep(1);
+          setOverrideDone(false);
+          setDecisionStep(null);
+        } else {
+          setDecisionStep(getNextStep(activeUnit.type, null, null, []));
+          setOverrideStep(null);
+          setOverrideDone(false);
+        }
+      }
+
+      function handleOverrideAnswer(ans) {
+        if (ans === "yes") {
+          setFinalDecision("Hold and Shoot");
+          setOverrideStep(null);
+          setOverrideDone(true);
+        } else {
+          setOverrideStep(null);
+          setOverrideDone(true);
+          setDecisionStep(getNextStep(activeUnit.type, null, null, []));
+        }
+      }
+
+      function getAmendedActions(unit, decision) {
+        if (!unit || !unit.rules || !decision) return [];
+        const rules = unit.rules;
+        const actions = [];
+        const lowerDecision = decision.toLowerCase();
+        // Strider: Charge or Advance
+        if (rules.includes("Strider") && (lowerDecision.includes("charge") || lowerDecision.includes("advance"))) {
+          actions.push("Treat difficult and dangerous terrain as open terrain when choosing where to move next.");
+        }
+        // Flying: Charge or Advance
+        if (rules.includes("Flying") && (lowerDecision.includes("charge") || lowerDecision.includes("advance"))) {
+          actions.push("Treat difficult terrain as open terrain when choosing where to move next.");
+        }
+        // AP: Charge or Shoot
+        if (rules.includes("AP") && (lowerDecision.includes("charge") || lowerDecision.includes("shoot"))) {
+          actions.push("Target enemies with the best defensive value first.");
+        }
+        // Sniper: Charge or Shoot
+        if (rules.includes("Sniper") && (lowerDecision.includes("charge") || lowerDecision.includes("shoot"))) {
+          actions.push("Target heroes first, and models with upgrades second, prioritizing those with the most expensive upgrade.");
+        }
+        // Deadly: Charge or Shoot
+        if (rules.includes("Deadly") && (lowerDecision.includes("charge") || lowerDecision.includes("shoot"))) {
+          actions.push("Target single-model units with Tough first, and units with Tough second, prioritizing those with the lowest total remaining Tough.");
+        }
+        return actions;
+      }
+
+      // For now, assume all units alive unless alive === false
+      const aliveUnits = unitsState.filter(u => u.alive !== false);
+      const deadUnits = unitsState.filter(u => u.alive === false);
+
+      const activeUnit = activeIndex !== null ? aliveUnits[activeIndex] : null;
+
+      const nextUnit = () => {
+        if (aliveUnits.length === 0) return;
+        // Reset decision tree when new unit is activated
+        setDecisionStep(null);
+        setDecisionAnswers([]);
+        setFinalDecision("");
+        setOverrideStep(null);
+        setOverrideDone(false);
+        // Get indices of alive units
+        const aliveIndices = aliveUnits.map(u => unitsState.findIndex(x => x === u));
+        // Only allow units not activated this turn
+        let notActivatedUnits = aliveUnits.filter(u => !activatedThisTurn.includes(unitsState.findIndex(x => x === u)));
+        // Filter out shaken units if there are non-shaken units
+        const nonShakenUnits = notActivatedUnits.filter(u => !u.shaken);
+        let candidates = nonShakenUnits.length > 0 ? nonShakenUnits : notActivatedUnits;
+        // If all units have been activated, start new turn
+        if (candidates.length === 0) {
+          setTurn(t => {
+            // Reset decision tree when new turn begins
+            setDecisionStep(null);
+            setDecisionAnswers([]);
+            setFinalDecision("");
+            setOverrideStep(null);
+            setOverrideDone(false);
+            return t + 1;
+          });
+          setActivatedThisTurn([]);
+          setActiveIndex(null);
+          return;
+        }
+        // Counter logic: only allow Counter units after all non-Counter units are activated
+        const nonCounterUnits = candidates.filter(u => !(u.rules && u.rules.includes("Counter")));
+        const counterUnits = candidates.filter(u => u.rules && u.rules.includes("Counter"));
+        let filteredCandidates;
+        if (nonCounterUnits.length > 0) {
+          filteredCandidates = nonCounterUnits;
+        } else {
+          filteredCandidates = counterUnits;
+        }
+        // Only allow units not activated this turn (after reset)
+        filteredCandidates = filteredCandidates.filter(u => !activatedThisTurn.includes(unitsState.findIndex(x => x === u)));
+        // Pick a random unit from filteredCandidates
+        const currentUnit = activeIndex !== null ? aliveUnits[activeIndex] : null;
+        // Exclude current unit from candidates if more than 1
+        let finalCandidates = filteredCandidates.length > 1 && currentUnit ? filteredCandidates.filter(u => u !== currentUnit) : filteredCandidates;
+        const randomIdx = Math.floor(Math.random() * finalCandidates.length);
+        const chosenUnit = finalCandidates[randomIdx];
+        // Find the index of the chosen unit in aliveUnits
+        const newIndex = aliveUnits.findIndex(u => u === chosenUnit);
+        setActiveIndex(newIndex);
+        // Mark this unit as activated for this turn
+        const chosenGlobalIdx = unitsState.findIndex(u => u === chosenUnit);
+        setActivatedThisTurn(prev => [...prev, chosenGlobalIdx]);
+      };
+
+      const getUnitClass = (unit, index) => {
+        if (unit.alive === false) return "text-gray-500 line-through";
+        if (unit.shaken) return "text-red-500 font-semibold";
+        // Remove yellow highlight for active unit in Not Yet Activated panel
+        return "";
+      };
+
+      const markDead = (idx) => {
+        setUnitsState(prev => prev.map((u, i) => i === idx ? { ...u, alive: false } : u));
+      };
+      const markShaken = (idx) => {
+        setUnitsState(prev => prev.map((u, i) => i === idx ? { ...u, shaken: true } : u));
+      };
+      const markUnshaken = (idx) => {
+        setUnitsState(prev => prev.map((u, i) => i === idx ? { ...u, shaken: false } : u));
+      };
+
+      return (
+        <div className="p-0 bg-gray-900 rounded-2xl max-w-6xl w-full shadow-2xl border border-gray-800">
+          {/* Deployment Modal */}
+          {showDeployment && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70">
+              <div className="bg-gray-900 rounded-2xl border-2 border-yellow-400 shadow-2xl max-w-2xl w-full p-8 relative">
+                <h2 className="text-3xl font-extrabold text-yellow-300 mb-6 text-center">Deployment Order</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div>
+                    <h3 className="text-xl font-bold text-blue-400 mb-2 text-center">East</h3>
+                    <ul className="space-y-2">
+                      {eastUnits.map((unit, i) => (
+                        <li key={i} className="bg-gray-800 rounded-xl p-3 border border-blue-400 text-blue-200 font-semibold text-center">{unit.name}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-green-400 mb-2 text-center">West</h3>
+                    <ul className="space-y-2">
+                      {westUnits.map((unit, i) => (
+                        <li key={i} className="bg-gray-800 rounded-xl p-3 border border-green-400 text-green-200 font-semibold text-center">{unit.name}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+                <div className="mt-8 flex justify-center">
+                  <button
+                    className="bg-yellow-500 hover:bg-yellow-600 text-gray-900 font-bold px-8 py-3 rounded-xl shadow"
+                    onClick={() => setShowDeployment(false)}
+                  >
+                    Continue
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          <div className="bg-gradient-to-r from-green-500 via-blue-400 to-yellow-300 rounded-t-2xl px-8 py-6 flex items-center justify-between">
+            <h2 className="text-3xl font-extrabold text-gray-900 tracking-wide">Match Screen</h2>
+            <span className="text-lg font-semibold text-gray-800">Turn {turn}</span>
+            <div className="flex gap-2">
+              <button
+                className="px-3 py-1 bg-blue-700 hover:bg-blue-800 text-white font-bold rounded-xl shadow"
+                onClick={() => {
+                  setTurn(t => {
+                    const newTurn = Math.max(1, t - 1);
+                    setDecisionStep(null);
+                    setDecisionAnswers([]);
+                    setFinalDecision("");
+                    setOverrideStep(null);
+                    setOverrideDone(false);
+                    return newTurn;
+                  });
+                  setActivatedThisTurn([]);
+                  setActiveIndex(null);
+                }}
+              >
+                -
+              </button>
+              <button
+                className="px-3 py-1 bg-blue-700 hover:bg-blue-800 text-white font-bold rounded-xl shadow"
+                onClick={() => {
+                  setTurn(t => {
+                    const newTurn = t + 1;
+                    setDecisionStep(null);
+                    setDecisionAnswers([]);
+                    setFinalDecision("");
+                    setOverrideStep(null);
+                    setOverrideDone(false);
+                    return newTurn;
+                  });
+                  setActivatedThisTurn([]);
+                  setActiveIndex(null);
+                }}
+              >
+                +
+              </button>
+            </div>
+          </div>
+          <div className="p-8 grid grid-cols-1 md:grid-cols-3 xl:grid-cols-3 gap-8">
+            {/* Active Unit Info */}
+            <section className="bg-gray-800 rounded-2xl border-2 border-yellow-400 shadow-lg p-6">
+              <h3 className="text-2xl font-bold mb-4 text-yellow-300">Active Unit</h3>
+              {activeUnit ? (
+                <div>
+                  <p className={activeUnit.alive === false ? "text-gray-500 line-through" : activeUnit.shaken ? "text-red-500 font-semibold" : "text-yellow-200 font-bold"}>
+                    <span className="font-semibold">Name:</span> {activeUnit.name}
+                  </p>
+                  <p className={activeUnit.alive === false ? "text-gray-500 line-through" : activeUnit.shaken ? "text-red-500 font-semibold" : "text-blue-200 font-bold"}>
+                    <span className="font-semibold">Type:</span> {activeUnit.type}
+                  </p>
+                  <p className={activeUnit.alive === false ? "text-gray-500 line-through" : activeUnit.shaken ? "text-red-500 font-semibold" : "text-purple-200 font-bold"}>
+                    <span className="font-semibold">Special Rules:</span>
+                    {(activeUnit.rules && activeUnit.rules.length) ? (
+                      activeUnit.rules.map((rule, i) => (
+                        <span
+                          key={rule}
+                          className="ml-1 underline decoration-dotted cursor-pointer text-purple-300"
+                          tabIndex="0"
+                          onMouseEnter={e => setTooltip({ rule, text: ruleExplanations[rule], x: e.target.getBoundingClientRect().left, y: e.target.getBoundingClientRect().bottom })}
+                          onMouseLeave={() => setTooltip({ rule: null, text: "", x: 0, y: 0 })}
+                          onFocus={e => setTooltip({ rule, text: ruleExplanations[rule], x: e.target.getBoundingClientRect().left, y: e.target.getBoundingClientRect().bottom })}
+                          onBlur={() => setTooltip({ rule: null, text: "", x: 0, y: 0 })}
+                        >
+                          {rule}{i < activeUnit.rules.length - 1 ? ',' : ''}
+                        </span>
+                      ))
+                    ) : "None"}
+                  </p>
+                  {tooltip.rule && (
+                    <div
+                      style={{
+                        position: "fixed",
+                        left: tooltip.x,
+                        top: tooltip.y + 8,
+                        zIndex: 100,
+                        background: "#1a202c",
+                        color: "#f7fafc",
+                        padding: "12px",
+                        borderRadius: "8px",
+                        minWidth: "320px",
+                        maxWidth: "400px",
+                        fontSize: "14px",
+                        border: "1px solid #2d3748",
+                        boxShadow: "0 4px 16px rgba(0,0,0,0.4)"
+                      }}
+                    >
+                      {tooltip.text}
+                    </div>
+                  )}
+                  <p className={activeUnit.alive === false ? "text-gray-500 line-through" : activeUnit.shaken ? "text-red-500 font-semibold" : "text-blue-200 font-bold"}>
+                    <span className="font-semibold">Qua:</span> +{activeUnit.qua}
+                  </p>
+                  <p className={activeUnit.alive === false ? "text-gray-500 line-through" : activeUnit.shaken ? "text-red-500 font-semibold" : "text-green-200 font-bold"}>
+                    <span className="font-semibold">Def:</span> +{activeUnit.def}
+                  </p>
+                </div>
+              ) : (
+                <p className="text-gray-400">No active unit.</p>
+              )}
+              <button 
+                onClick={nextUnit} 
+                className="mt-6 bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2 rounded-xl shadow"
+              >
+                Next Unit
+              </button>
+            </section>
+
+            {/* Not Yet Activated Units List */}
+            <section className="bg-gray-800 rounded-2xl border-2 border-blue-400 shadow-lg p-6">
+              <h3 className="text-2xl font-bold mb-4 text-blue-300">Not Yet Activated ({aliveUnits.filter(u => !activatedThisTurn.includes(unitsState.findIndex(x => x === u))).length})</h3>
+              {aliveUnits.filter(u => !activatedThisTurn.includes(unitsState.findIndex(x => x === u))).length === 0 ? (
+                <p className="text-gray-400">All units have activated this turn.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {aliveUnits.filter(u => !activatedThisTurn.includes(unitsState.findIndex(x => x === u))).map((unit, i) => {
+                    const idx = unitsState.findIndex(u2 => u2 === unit);
+                    return (
+                      <li key={i} className={`p-2 rounded-xl ${getUnitClass(unit, i)} bg-gray-700 flex items-center justify-between`}>
+                        <span>
+                          {unit.name} <span className="text-gray-400">({unit.type})</span> <span className="text-blue-300">Qua:+{unit.qua}</span> <span className="text-green-300">Def:+{unit.def}</span>
+                        </span>
+                        <span className="flex gap-2">
+                          <button
+                            onClick={() => markDead(idx)}
+                            className="px-2 py-1 bg-red-700 hover:bg-red-800 text-white rounded text-xs shadow"
+                          >
+                            Dead
+                          </button>
+                          {unit.shaken ? (
+                            <button
+                              onClick={() => markUnshaken(idx)}
+                              className="px-2 py-1 bg-yellow-700 hover:bg-yellow-800 text-white rounded text-xs shadow"
+                            >
+                              Unshaken
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => markShaken(idx)}
+                              className="px-2 py-1 bg-yellow-700 hover:bg-yellow-800 text-white rounded text-xs shadow"
+                            >
+                              Shaken
+                            </button>
+                          )}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+              {/* Activated Units Panel */}
+              <div className="mt-8">
+                <h3 className="text-xl font-bold mb-2 text-blue-400">Activated This Turn ({activatedThisTurn.length})</h3>
+                {activatedThisTurn.length === 0 ? (
+                  <p className="text-gray-400">No units activated this turn.</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {activatedThisTurn.map((idx, i) => {
+                      const unit = unitsState[idx];
+                      if (!unit || unit.alive === false) return null;
+                      return (
+                        <li key={i} className="p-2 rounded-xl bg-gray-700 text-blue-300 font-semibold">
+                          {unit.name} <span className="text-gray-400">({unit.type})</span> <span className="text-blue-300">Qua:+{unit.qua}</span> <span className="text-green-300">Def:+{unit.def}</span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+              {/* Dead Units Panel */}
+              <div className="mt-8">
+                <h3 className="text-xl font-bold mb-2 text-red-400">Dead Units ({deadUnits.length})</h3>
+                {deadUnits.length === 0 ? (
+                  <p className="text-gray-400">No units dead.</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {deadUnits.map((unit, i) => (
+                      <li key={i} className="p-2 rounded-xl bg-gray-700 text-gray-500 line-through">
+                        {unit.name} <span className="text-gray-400">({unit.type})</span> <span className="text-blue-300">Qua:+{unit.qua}</span> <span className="text-green-300">Def:+{unit.def}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </section>
+
+            {/* AI Decision Making Panel */}
+            <section className="bg-gray-800 rounded-2xl border-2 border-green-400 shadow-lg p-6">
+              <h3 className="text-2xl font-bold mb-4 text-green-400">AI Decision Making</h3>
+              {activeUnit ? (
+                <div>
+                  {!finalDecision ? (
+                    <>
+                      <button
+                        className="mb-6 bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2 rounded-xl shadow"
+                        onClick={startDecision}
+                        disabled={decisionStep !== null || overrideStep !== null}
+                      >
+                        Start Decision
+                      </button>
+                      {overrideStep === 1 && (
+                        <div className="mb-4">
+                          <p className="mb-2 font-semibold text-yellow-300">Are there any enemies in range?</p>
+                          <div className="flex gap-2">
+                            <button
+                              className="bg-green-600 hover:bg-green-700 text-white font-bold px-4 py-2 rounded-xl shadow"
+                              onClick={() => handleOverrideAnswer("yes")}
+                            >
+                              Yes
+                            </button>
+                            <button
+                              className="bg-red-600 hover:bg-red-700 text-white font-bold px-4 py-2 rounded-xl shadow"
+                              onClick={() => handleOverrideAnswer("no")}
+                            >
+                              No
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                      {overrideDone && !finalDecision && decisionStep !== null && (
+                        <div className="mb-4">
+                          <p className="mb-2 font-semibold text-yellow-300">{getDecisionQuestion(activeUnit.type, decisionStep, decisionAnswers)}</p>
+                          <div className="flex gap-2">
+                            <button
+                              className="bg-green-600 hover:bg-green-700 text-white font-bold px-4 py-2 rounded-xl shadow"
+                              onClick={() => handleDecisionAnswer("yes")}
+                            >
+                              Yes
+                            </button>
+                            <button
+                              className="bg-red-600 hover:bg-red-700 text-white font-bold px-4 py-2 rounded-xl shadow"
+                              onClick={() => handleDecisionAnswer("no")}
+                            >
+                              No
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                      {!overrideStep && !overrideDone && decisionStep !== null && (
+                        <div className="mb-4">
+                          <p className="mb-2 font-semibold text-yellow-300">{getDecisionQuestion(activeUnit.type, decisionStep, decisionAnswers)}</p>
+                          <div className="flex gap-2">
+                            <button
+                              className="bg-green-600 hover:bg-green-700 text-white font-bold px-4 py-2 rounded-xl shadow"
+                              onClick={() => handleDecisionAnswer("yes")}
+                            >
+                              Yes
+                            </button>
+                            <button
+                              className="bg-red-600 hover:bg-red-700 text-white font-bold px-4 py-2 rounded-xl shadow"
+                              onClick={() => handleDecisionAnswer("no")}
+                            >
+                              No
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="mt-4">
+                      <p className="font-bold text-green-300 text-xl mb-2">Decision:</p>
+                      <p className="text-lg mb-4">{finalDecision}</p>
+                      {(() => {
+                        const actions = getAmendedActions(activeUnit, finalDecision);
+                        const hasCaster = activeUnit && activeUnit.rules && activeUnit.rules.includes("Caster");
+                        return (
+                          <>
+                            {actions.length > 0 && (
+                              <div className="mt-4">
+                                <p className="font-bold text-yellow-300 mb-2">Additional Actions:</p>
+                                <ul className="list-disc list-inside space-y-1">
+                                  {actions.map((act, i) => (
+                                    <li key={i} className="text-yellow-200">{act}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                            {hasCaster && (
+                              <div className="mt-6 p-4 bg-purple-900 rounded-lg border border-purple-700">
+                                <p className="font-bold text-purple-300 mb-2">Caster Override:</p>
+                                <p className="text-purple-100">
+                                  After moving (but before attacking) select a random spell by rolling D3+X, where X is their caster level. If there is no valid target for that spell, or they don’t have enough tokens to cast it, they must cycle through the list until there is a valid spell, or else don’t cast anything.
+                                </p>
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
+                      <button
+                        className="mt-6 bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2 rounded-xl shadow"
+                        onClick={() => {
+                          setDecisionStep(null);
+                          setDecisionAnswers([]);
+                          setFinalDecision("");
+                          setOverrideStep(null);
+                          setOverrideDone(false);
+                        }}
+                      >
+                        Restart
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-gray-400">No active unit selected.</p>
+              )}
+            </section>
+          </div>
+          <div className="mt-8 flex justify-end">
+            <button 
+              onClick={onBack} 
+              className="bg-red-600 hover:bg-red-700 text-white font-bold px-6 py-3 rounded-xl shadow"
+            >
+              End Match
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    function App() {
+      const [view, setView] = useState("home");
+      const [selectedArmy, setSelectedArmy] = useState(null);
+      const [editArmy, setEditArmy] = useState(null);
+
+      return (
+        <div className="w-full h-full flex items-center justify-center p-4 min-h-screen">
+          {view === "home" && (
+            <HomeScreen
+              onNewArmy={() => { setEditArmy(null); setView("armyCreation"); }}
+              onArmySelect={() => setView("armySelect")}
+            />
+          )}
+          {view === "armyCreation" && (
+            <ArmyCreation 
+              onSave={() => setView("home")}
+              onBack={() => setView("home")}
+              editArmy={editArmy}
+            />
+          )}
+          {view === "armySelect" && (
+            <ArmySelect
+              onBack={() => setView("home")}
+              onStartMatch={(army) => {
+                setSelectedArmy(army);
+                setView("match");
+              }}
+              onDeleteArmy={(armyIdx) => {
+                const armies = JSON.parse(localStorage.getItem("armies") || "[]");
+                armies.splice(armyIdx, 1);
+                localStorage.setItem("armies", JSON.stringify(armies));
+              }}
+              onEditArmy={(army) => {
+                setEditArmy(army);
+                setView("armyCreation");
+              }}
+            />
+          )}
+          {view === "match" && selectedArmy && (
+            <MatchScreen
+              army={selectedArmy}
+              onBack={() => setView("armySelect")}
+            />
+          )}
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById("root"));
+    root.render(<App />);
+  </script>
+</body>
+</html>
