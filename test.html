@@ -1033,6 +1033,50 @@
       const [selectedArmy, setSelectedArmy] = useState(null);
       const [editArmy, setEditArmy] = useState(null);
 
+      // Add default armies if none exist
+      useEffect(() => {
+        const existing = JSON.parse(localStorage.getItem("armies") || "[]");
+        if (existing.length === 0) {
+          const defaultArmies = [
+            {
+              name: "Iron Wolves",
+              units: [
+                { name: "Sergeant Voss", type: "Hybrid", rules: ["Counter"], qua: "3", def: "4", cost: 35 },
+                { name: "Wolfblade", type: "Melee", rules: ["Deadly"], qua: "4", def: "3", cost: 30 },
+                { name: "Steel Gunner", type: "Shooting", rules: ["AP"], qua: "4", def: "4", cost: 28 },
+                { name: "Scout", type: "Hybrid", rules: ["Strider"], qua: "5", def: "3", cost: 22 }
+              ],
+              cost: 35+30+28+22
+            },
+            {
+              name: "Crimson Legion",
+              units: [
+                { name: "Captain Red", type: "Hybrid", rules: ["Relentless"], qua: "3", def: "5", cost: 40 },
+                { name: "Legionnaire", type: "Shooting", rules: ["Indirect"], qua: "4", def: "4", cost: 32 },
+                { name: "Blade Sister", type: "Melee", rules: ["Deadly"], qua: "5", def: "3", cost: 27 },
+                { name: "Pyro", type: "Shooting", rules: ["AP"], qua: "4", def: "3", cost: 29 },
+                { name: "Medic", type: "Hybrid", rules: [], qua: "5", def: "4", cost: 25 }
+              ],
+              cost: 40+32+27+29+25
+            },
+            {
+              name: "Star Seekers",
+              units: [
+                { name: "Astro Mage", type: "Hybrid", rules: ["Caster"], qua: "3", def: "4", cost: 38 },
+                { name: "Star Ranger", type: "Shooting", rules: ["Sniper"], qua: "4", def: "4", cost: 33 },
+                { name: "Voidblade", type: "Melee", rules: ["Strider"], qua: "5", def: "3", cost: 26 }
+              ],
+              cost: 38+33+26
+            }
+          ];
+          // Calculate army cost
+          defaultArmies.forEach(army => {
+            army.cost = army.units.reduce((sum, u) => sum + Number(u.cost || 0), 0);
+          });
+          localStorage.setItem("armies", JSON.stringify(defaultArmies));
+        }
+      }, []);
+
       return (
         <div className="w-full h-full flex items-center justify-center p-4 min-h-screen">
           {view === "home" && (
