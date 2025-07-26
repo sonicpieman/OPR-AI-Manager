@@ -266,7 +266,7 @@
       };
 
       // Tooltip state for rule explanations
-      const [tooltip, setTooltip] = useState({ rule: null, text: "", x: 0, y: 0 });
+      const [tooltip, setTooltip] = useState({ rule: null, text: "", x: 0, y: 0, width: 0, height: 0 });
 
       // Army cost calculation
       const armyCost = units.reduce((sum, u) => sum + Number(u.cost || 0), 0);
@@ -339,25 +339,48 @@
                         ))}
                       </div>
                       {tooltip.rule && (
-                        <div
-                          style={{
-                            position: "fixed",
-                            left: tooltip.x,
-                            top: tooltip.y + 8,
-                            zIndex: 100,
-                            background: "#1a202c",
-                            color: "#f7fafc",
-                            padding: "12px",
-                            borderRadius: "8px",
-                            minWidth: "320px",
-                            maxWidth: "400px",
-                            fontSize: "14px",
-                            border: "1px solid #2d3748",
-                            boxShadow: "0 4px 16px rgba(0,0,0,0.4)"
-                          }}
-                        >
-                          {tooltip.text}
-                        </div>
+                        (() => {
+                          // Calculate safe position for tooltip
+                          const tooltipWidth = 340; // px, matches minWidth
+                          const tooltipHeight = 60; // px, estimate
+                          const padding = 12;
+                          let left = tooltip.x;
+                          let top = tooltip.y + 8;
+                          if (typeof window !== 'undefined') {
+                            const vw = window.innerWidth;
+                            const vh = window.innerHeight;
+                            if (left + tooltipWidth + padding > vw) {
+                              left = vw - tooltipWidth - padding;
+                            }
+                            if (left < padding) left = padding;
+                            if (top + tooltipHeight + padding > vh) {
+                              top = tooltip.y - tooltipHeight - 8;
+                              if (top < padding) top = padding;
+                            }
+                          }
+                          return (
+                            <div
+                              style={{
+                                position: "fixed",
+                                left,
+                                top,
+                                zIndex: 100,
+                                background: "#1a202c",
+                                color: "#f7fafc",
+                                padding: "12px",
+                                borderRadius: "8px",
+                                minWidth: "320px",
+                                maxWidth: "400px",
+                                fontSize: "14px",
+                                border: "1px solid #2d3748",
+                                boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
+                                wordBreak: 'break-word',
+                              }}
+                            >
+                              {tooltip.text}
+                            </div>
+                          );
+                        })()
                       )}
                     </div>
                     <div className="flex gap-2">
@@ -416,14 +439,21 @@
       const [unitsState, setUnitsState] = React.useState(army.units.map(u => ({ ...u })));
       const [turn, setTurn] = React.useState(1);
       const [activatedThisTurn, setActivatedThisTurn] = React.useState([]);
-      // Deployment modal state
-      const [showDeployment, setShowDeployment] = React.useState(true);
+      // Terrain/objective setup modal state
+      const [showObjectiveSetup, setShowObjectiveSetup] = React.useState(true);
+      const [showDeployment, setShowDeployment] = React.useState(false);
       const [eastUnits, setEastUnits] = React.useState([]);
       const [westUnits, setWestUnits] = React.useState([]);
+      // Objective placement state
+      const [objectives, setObjectives] = React.useState([]);
+      const [currentSquare, setCurrentSquare] = React.useState(null);
+      const [aiTurn, setAiTurn] = React.useState(true);
+      const [objectiveStep, setObjectiveStep] = React.useState(0);
+      const [tableSquares] = React.useState(["Top Left", "Top Right", "Bottom Left", "Bottom Right"]);
       // Use hardcoded explanations
       const ruleExplanations = RULE_EXPLANATIONS;
       // Tooltip state for rule explanations in MatchScreen
-      const [tooltip, setTooltip] = React.useState({ rule: null, text: "", x: 0, y: 0 });
+      const [tooltip, setTooltip] = React.useState({ rule: null, text: "", x: 0, y: 0, width: 0, height: 0 });
 
       // Decision tree state
       const [decisionStep, setDecisionStep] = React.useState(null);
@@ -671,6 +701,130 @@
 
       return (
         <div className="p-0 bg-gray-900 rounded-2xl max-w-6xl w-full shadow-2xl border border-gray-800">
+          {/* Objective Setup Modal */}
+          {showObjectiveSetup && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70">
+              <div className="bg-gray-900 rounded-2xl border-2 border-blue-400 shadow-2xl max-w-2xl w-full p-8 relative">
+                <h2 className="text-3xl font-extrabold text-blue-300 mb-6 text-center">Objectives Set Up</h2>
+                <div className="mb-4 text-lg text-blue-200">
+                  <p>Divide the table into 4 equal squares: Top Left, Top Right, Bottom Left, Bottom Right.</p>
+                  <p className="mt-2">When it is the AI’s turn to place an objective, a random square will be selected. Place the objective in the center of that square.</p>
+                  <p className="mt-2">If that’s not possible, roll for another random square and move the objective toward it just enough to be in a valid position.</p>
+                  <p className="mt-2">Alternate between AI and user until you decide there are enough objectives, then proceed with deployment.</p>
+                </div>
+                <div className="mb-4">
+                  <h3 className="text-xl font-bold text-yellow-300 mb-2">Objectives Placed:</h3>
+                  <ul className="space-y-1">
+                    {objectives.map((obj, i) => (
+                      <li key={i} className="text-blue-200">Objective {i+1}: {obj.by} placed in <span className="font-bold text-yellow-300">{obj.square}</span></li>
+                    ))}
+                  </ul>
+                </div>
+                {/* Objective placement step */}
+                {objectiveStep === 0 && (
+                  <div className="mb-4">
+                    <button
+                      className="bg-yellow-500 hover:bg-yellow-600 text-gray-900 font-bold px-8 py-3 rounded-xl shadow"
+                      onClick={() => {
+                        // AI places objective
+                        const randIdx = Math.floor(Math.random() * tableSquares.length);
+                        setCurrentSquare(tableSquares[randIdx]);
+                        setObjectiveStep(1);
+                        setAiTurn(true);
+                      }}
+                    >
+                      AI Place Objective
+                    </button>
+                    <button
+                      className="ml-4 bg-green-500 hover:bg-green-600 text-gray-900 font-bold px-8 py-3 rounded-xl shadow"
+                      onClick={() => {
+                        setObjectiveStep(2);
+                        setAiTurn(false);
+                      }}
+                    >
+                      User Place Objective
+                    </button>
+                  </div>
+                )}
+                {objectiveStep === 1 && (
+                  <div className="mb-4">
+                    <p className="text-lg text-yellow-300 mb-2">AI randomly selected: <span className="font-bold">{currentSquare}</span></p>
+                    <p className="mb-2">Place the objective in the center of this square.</p>
+                    <button
+                      className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-2 rounded-xl shadow mr-2"
+                      onClick={() => {
+                        setObjectives([...objectives, { by: "AI", square: currentSquare }]);
+                        setObjectiveStep(0);
+                        setCurrentSquare(null);
+                      }}
+                    >
+                      Success
+                    </button>
+                    <button
+                      className="bg-red-600 hover:bg-red-700 text-white font-bold px-6 py-2 rounded-xl shadow"
+                      onClick={() => {
+                        // Roll for another square to move toward
+                        let otherSquares = tableSquares.filter(sq => sq !== currentSquare);
+                        const randIdx = Math.floor(Math.random() * otherSquares.length);
+                        const targetSquare = otherSquares[randIdx];
+                        setObjectiveStep(3);
+                        setCurrentSquare(currentSquare + " (move just enough toward " + targetSquare + " to be valid)");
+                        window._lastObjectiveTargetSquare = targetSquare;
+                      }}
+                    >
+                      Not Possible, Roll Another Square
+                    </button>
+                  </div>
+                )}
+                {objectiveStep === 3 && (
+                  <div className="mb-4">
+                    <p className="text-lg text-yellow-300 mb-2">Move the objective just enough toward <span className="font-bold">{window._lastObjectiveTargetSquare}</span> from the center of <span className="font-bold">{currentSquare.replace(/ \(move.*\)/,"")}</span> to be in a valid position.</p>
+                    <button
+                      className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-2 rounded-xl shadow mr-2"
+                      onClick={() => {
+                        setObjectives([...objectives, { by: "AI", square: currentSquare }]);
+                        setObjectiveStep(0);
+                        setCurrentSquare(null);
+                        window._lastObjectiveTargetSquare = null;
+                      }}
+                    >
+                      Success
+                    </button>
+                  </div>
+                )}
+                {objectiveStep === 2 && (
+                  <div className="mb-4">
+                    <p className="text-lg text-green-300 mb-2">User: Select a square to place the objective.</p>
+                    <div className="flex flex-wrap gap-2">
+                      {tableSquares.map(sq => (
+                        <button
+                          key={sq}
+                          className="bg-green-600 hover:bg-green-700 text-white font-bold px-4 py-2 rounded-xl shadow"
+                          onClick={() => {
+                            setObjectives([...objectives, { by: "User", square: sq }]);
+                            setObjectiveStep(0);
+                          }}
+                        >
+                          {sq}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div className="mt-8 flex justify-center">
+                  <button
+                    className="bg-blue-500 hover:bg-blue-600 text-white font-bold px-8 py-3 rounded-xl shadow"
+                    onClick={() => {
+                      setShowObjectiveSetup(false);
+                      setShowDeployment(true);
+                    }}
+                  >
+                    Proceed to Deployment
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
           {/* Deployment Modal */}
           {showDeployment && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70">
@@ -759,44 +913,73 @@
                   <p className={activeUnit.alive === false ? "text-gray-500 line-through" : activeUnit.shaken ? "text-red-500 font-semibold" : "text-blue-200 font-bold"}>
                     <span className="font-semibold">Type:</span> {activeUnit.type}
                   </p>
-                  <p className={activeUnit.alive === false ? "text-gray-500 line-through" : activeUnit.shaken ? "text-red-500 font-semibold" : "text-purple-200 font-bold"}>
+                  <div className={activeUnit.alive === false ? "text-gray-500 line-through" : activeUnit.shaken ? "text-red-500 font-semibold" : "text-purple-200 font-bold"}>
                     <span className="font-semibold">Special Rules:</span>
-                    {(activeUnit.rules && activeUnit.rules.length) ? (
-                      activeUnit.rules.map((rule, i) => (
-                        <span
-                          key={rule}
-                          className="ml-1 underline decoration-dotted cursor-pointer text-purple-300"
-                          tabIndex="0"
-                          onMouseEnter={e => setTooltip({ rule, text: ruleExplanations[rule], x: e.target.getBoundingClientRect().left, y: e.target.getBoundingClientRect().bottom })}
-                          onMouseLeave={() => setTooltip({ rule: null, text: "", x: 0, y: 0 })}
-                          onFocus={e => setTooltip({ rule, text: ruleExplanations[rule], x: e.target.getBoundingClientRect().left, y: e.target.getBoundingClientRect().bottom })}
-                          onBlur={() => setTooltip({ rule: null, text: "", x: 0, y: 0 })}
-                        >
-                          {rule}{i < activeUnit.rules.length - 1 ? ',' : ''}
-                        </span>
-                      ))
-                    ) : "None"}
-                  </p>
-                  {tooltip.rule && (
                     <div
-                      style={{
-                        position: "fixed",
-                        left: tooltip.x,
-                        top: tooltip.y + 8,
-                        zIndex: 100,
-                        background: "#1a202c",
-                        color: "#f7fafc",
-                        padding: "12px",
-                        borderRadius: "8px",
-                        minWidth: "320px",
-                        maxWidth: "400px",
-                        fontSize: "14px",
-                        border: "1px solid #2d3748",
-                        boxShadow: "0 4px 16px rgba(0,0,0,0.4)"
-                      }}
+                      className="flex flex-wrap gap-x-1 gap-y-1 mt-1"
+                      style={{ maxWidth: '100%', overflowX: 'auto', wordBreak: 'break-word', whiteSpace: 'normal' }}
                     >
-                      {tooltip.text}
+                      {(activeUnit.rules && activeUnit.rules.length) ? (
+                        activeUnit.rules.map((rule, i) => (
+                          <span
+                            key={rule}
+                            className="underline decoration-dotted cursor-pointer text-purple-300"
+                            tabIndex="0"
+                            onMouseEnter={e => setTooltip({ rule, text: ruleExplanations[rule], x: e.target.getBoundingClientRect().left, y: e.target.getBoundingClientRect().bottom })}
+                            onMouseLeave={() => setTooltip({ rule: null, text: "", x: 0, y: 0 })}
+                            onFocus={e => setTooltip({ rule, text: ruleExplanations[rule], x: e.target.getBoundingClientRect().left, y: e.target.getBoundingClientRect().bottom })}
+                            onBlur={() => setTooltip({ rule: null, text: "", x: 0, y: 0 })}
+                            style={{ wordBreak: 'break-word', whiteSpace: 'normal' }}
+                          >
+                            {rule}{i < activeUnit.rules.length - 1 ? ',' : ''}
+                          </span>
+                        ))
+                      ) : "None"}
                     </div>
+                  </div>
+                  {tooltip.rule && (
+                    (() => {
+                      // Calculate safe position for tooltip
+                      const tooltipWidth = 340; // px, matches minWidth
+                      const tooltipHeight = 60; // px, estimate
+                      const padding = 12;
+                      let left = tooltip.x;
+                      let top = tooltip.y + 8;
+                      if (typeof window !== 'undefined') {
+                        const vw = window.innerWidth;
+                        const vh = window.innerHeight;
+                        if (left + tooltipWidth + padding > vw) {
+                          left = vw - tooltipWidth - padding;
+                        }
+                        if (left < padding) left = padding;
+                        if (top + tooltipHeight + padding > vh) {
+                          top = tooltip.y - tooltipHeight - 8;
+                          if (top < padding) top = padding;
+                        }
+                      }
+                      return (
+                        <div
+                          style={{
+                            position: "fixed",
+                            left,
+                            top,
+                            zIndex: 100,
+                            background: "#1a202c",
+                            color: "#f7fafc",
+                            padding: "12px",
+                            borderRadius: "8px",
+                            minWidth: "320px",
+                            maxWidth: "400px",
+                            fontSize: "14px",
+                            border: "1px solid #2d3748",
+                            boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
+                            wordBreak: 'break-word',
+                          }}
+                        >
+                          {tooltip.text}
+                        </div>
+                      );
+                    })()
                   )}
                   <p className={activeUnit.alive === false ? "text-gray-500 line-through" : activeUnit.shaken ? "text-red-500 font-semibold" : "text-blue-200 font-bold"}>
                     <span className="font-semibold">Qua:</span> +{activeUnit.qua}
